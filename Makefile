@@ -6,8 +6,14 @@ setup:
 		echo "\nCreated .env file from .env.example. Please review it, update database credentials if necessary, and then run 'make setup' again.\n"; \
 		exit 1; \
 	fi
-	# 1. Build and start containers (this runs composer install)
-	./vendor/bin/sail up -d --build 2>/dev/null
+	# 1. Install composer dependencies (including laravel/sail)                                                                                                                                                              │
+	docker run --rm \
+		-v "$(PWD):/opt" \
+		-w /opt \
+		laravelsail/php82-composer:latest \
+		composer install --ignore-platform-reqs
+	# 2. Build and start containers (this runs composer install)
+	./vendor/bin/sail up -d --build
 	@echo "Waiting 20 seconds for containers to be ready..."
 	@sleep 20
 	# 2. Generate application key
