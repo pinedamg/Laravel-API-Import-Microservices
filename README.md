@@ -1,78 +1,172 @@
-# Fever code challenge
+# Fever Code Challenge Solution
 
-Welcome! We're thrilled to have you at this stage of the process. This challenge is designed to give us insight into your coding approach and problem-solving skills. It’s a simplified example of real-world scenarios we handle daily at Fever.
+This repository contains the solution for the Fever Code Challenge, developed as a microservice to integrate external provider plans into the Fever marketplace. This document details the architecture, setup, and usage of the solution.
 
-## About Fever
+## Table of Contents
+- [Fever Code Challenge Solution](#fever-code-challenge-solution)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Setup](#setup)
+  - [Architecture](#architecture)
+    - [Code Architecture](#code-architecture)
+    - [Infrastructure Architecture](#infrastructure-architecture)
+    - [Database Schema](#database-schema)
+    - [Job Synchronization and Resilience](#job-synchronization-and-resilience)
+  - [Usage](#usage)
+  - [Testing](#testing)
+  - [Future Improvements](#future-improvements)
 
-At Fever we work to bring experiences to people. We have a marketplace of plans from different providers that are curated and then consumed by multiple applications. We work hard to expand the range of experiences we offer to our customers. Consequently, we are continuously looking for new providers with great plans to integrate in our platforms. 
+## Introduction
+This project implements a Laravel-based microservice designed to efficiently synchronize event data from an external XML provider and expose it via a performant API. The solution emphasizes clean architecture, scalability, and maintainability, addressing various real-world challenges such as high traffic, data synchronization, and robust error handling.
 
-## The challenge
+## Setup
+To get the project up and running on your local machine, follow these steps:
 
-Your task is to develop a microservice that integrates plans from an external provider into the Fever marketplace.
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd <project-directory>
+    ```
+2.  **Create and review the environment file:**
+    ```bash
+    cp .env.example .env
+    # Open .env and review/update database credentials, APP_PORT, etc.
+    ```
+3.  **Run the automated setup command:**
+    This command will build Docker images, install dependencies, generate the application key, install Octane/Horizon, and run database migrations.
+    ```bash
+    make setup
+    ```
+    After this, the application should be fully operational.
 
-Even if this is just a disposable test, imagine that somebody will pick up this code and maintain it in the future. It will evolve new features will be added, existing ones adapted, and unnecessary functionalities removed. Writing clean, scalable, and maintainable code is crucial for ensuring the sustainability of any project.
+## Architecture
 
-> [!TIP]
-> This should be conceived as a long-term project, not just one-off code.
+### Code Architecture
+The application's core synchronization logic adheres strictly to SOLID principles, particularly the Single Responsibility Principle. The `ProviderSyncService` acts as an orchestrator, delegating specific tasks to specialized components.
 
-The external provider exposes an endpoint: https://provider.code-challenge.feverup.com/api/events
+```mermaid
+graph TD
+    A[SyncProviderEventsJob] --> B(ProviderSyncService)
+    B --> C(ProviderApiClient)
+    B --> D(XmlEventParser)
+    B --> E(EventDataTransformer)
+    B --> F(EventRepository)
+    C -- Fetches XML --> G(External Provider API)
+    D -- Parses XML --> B
+    E -- Transforms Data --> B
+    F -- Persists Data --> H(Database)
+```
 
-This API returns a list of available plans in XML format. Plans that are no longer available will not be included in future responses. Here are three example responses over consecutive API calls:
+### Infrastructure Architecture
+The solution leverages Docker Compose to orchestrate multiple services, providing a robust and scalable local development environment.
 
-- [Response 1](https://gist.githubusercontent.com/acalvotech/55223c0e5c55baa33086e2383badba64/raw/1cab82e2d1f3adc8d3b3dace0a409844bed698f0/response_1.xml)
-- [Response 2](https://gist.githubusercontent.com/acalvotech/d9c6fc5a5920bf741638d6179c8c07ed/raw/2b4ca961f05b2eebc0682f21357d37ac0eb5c80a/response_2.xml)
-- [Response 3](https://gist.githubusercontent.com/acalvotech/7c107daacfd05f32c1c1bcd7209d85ef/raw/ea4c4c8d2b7ccf2ae2be153d45353fb7187f5236/response_3.xml)
+```mermaid
+graph LR
+    User --> Web(Web Browser / API Client)
+    Web --> Nginx(Nginx / Load Balancer)
+    Nginx --> Octane(Laravel Octane - laravel.test)
+    Octane --> PgSQL(PostgreSQL)
+    Octane --> Redis(Redis)
 
-> [!WARNING]
-> The API endpoint has been designed with real-world conditions in mind, where network requests don’t always behave ideally. Your solution should demonstrate how you handle various scenarios that could occur in production environments. **Don’t assume the API endpoint will always respond successfully and with low latency.**
+    subgraph Docker Compose Services
+        Octane -- Dispatches Jobs --> Redis
+        Scheduler(Scheduler) -- Dispatches Jobs --> Redis
+        Horizon(Horizon) -- Processes Jobs --> Redis
+        Horizon --> PgSQL
+    end
 
-## Your Task
+    Scheduler -- Runs every minute --> Octane
+    Octane -- Queries --> PgSQL
+    Octane -- Caches --> Redis
+    Horizon -- Monitors --> Redis
+    Horizon -- Stores Failed Jobs --> PgSQL
+```
 
-You need to **develop and expose a single endpoint**:
+### Database Schema
+The primary data store is a PostgreSQL database. The `events` table is designed to store the synchronized plan data. Uniqueness is enforced on a composite key to correctly model the provider's data structure.
 
-- **API Spec:** [SwaggerHub Reference](https://app.swaggerhub.com/apis-docs/luis-pintado-feverup/backend-test/1.0.0)
-- The endpoint should accept `starts_at` and `ends_at` parameters and return only the plans within this time range.
-- Plans should be included if they were ever available (with `"sell_mode": "online"`).
-- Past plans should be retrievable even if they are no longer present in the provider’s latest response.
-- The endpoint must be performant, responding in **hundreds of milliseconds**, regardless of the state of other external services. For instance, if the external provider service is down, our search endpoint should still work as usual. Similarly, it should also respond quickly to all requests regardless of the traffic we receive.
+```mermaid
+erDiagram
+    events {
+        id INT PK
+        base_plan_id INT "Part of Composite Unique Key"
+        plan_id INT "Part of Composite Unique Key"
+        title VARCHAR
+        sell_mode VARCHAR
+        starts_at TIMESTAMP
+        ends_at TIMESTAMP
+        min_price DECIMAL
+        max_price DECIMAL
+        status VARCHAR
+        created_at TIMESTAMP
+        updated_at TIMESTAMP
+    }
+```
 
-## Evaluation criteria
+### Job Synchronization and Resilience
+The `SyncProviderEventsJob` is crucial for maintaining up-to-date event data. This diagram illustrates its interaction with the `ProviderSyncService`, including error handling, retries with backoff, and circuit breaker patterns to ensure resilience and efficient handling of external API interactions.
 
-Your solution will be evaluated holistically, with special attention to:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Scheduler
+    participant SyncProviderEventsJob
+    participant ProviderSyncService
+    participant ProviderApiClient
+    participant ExternalProviderAPI
+    participant RedisQueue
+    participant Database
 
-- **Problem-Solution Fit:** How well your solution aligns with the given problem.
-- **Adherence to API Spec:** Follow the provided OpenAPI specification.
-- **Documentation:** Provide a README explaining design choices and implementation details, additional design schemas will be valued.
-- **Makefile:** Include a Makefile with a run target to simplify running the application.
-- **Code Quality:** Readability, maintainability, and adherence to best practices.
-- **Software Architecture:** Structural design choices and scalability considerations.
-- **Efficiency:** Optimize for both resources and time efficiency.
+    Scheduler->>SyncProviderEventsJob: Dispatches job periodically
+    SyncProviderEventsJob->>ProviderSyncService: Calls syncEvents()
+    ProviderSyncService->>ProviderApiClient: Fetches XML data (with timeout)
 
-## Guidelines
+    alt API Call Fails (e.g., Timeout, 5xx)
+        ProviderApiClient--xSyncProviderEventsJob: Error response
+        SyncProviderEventsJob->>RedisQueue: Re-queue job with backoff (retry mechanism)
+        Note over SyncProviderEventsJob,RedisQueue: Configured retries and backoff strategy
+    else API Call Succeeds
+        ProviderApiClient->>ProviderSyncService: XML data
+        Note over ProviderSyncService: Handles large XML via streaming
+        ProviderSyncService->>Database: Upserts event data
+    end
 
-- We strongly encourage you to **implement the solution in the language you are most comfortable with**, even if it's not Python. We've seen candidates try to adapt to Python for the sake of the challenge, but that often results in lower code quality and doesn't reflect their real strengths.
-- The application will be run on a clean machine with almost no dependencies, so make sure your app installs everything it needs to run in a simple way (one or two commands at most). We encourage to implement a docker compose file, but it is not a requirement.
-- Feel free to use any libraries, frameworks, or tools that best fit the task.
-- Submit your code in the `master` branch of this repository.
+    alt Circuit Breaker Tripped
+        ProviderSyncService--xSyncProviderEventsJob: Circuit Breaker open
+        Note over SyncProviderEventsJob: Job fails fast, no API call
+    end
 
-## Going the extra mile 🚀
+    SyncProviderEventsJob->>RedisQueue: Marks job as complete/failed
+```
 
-To make your solution even stronger, consider:
+## Usage
+Once the setup is complete and containers are running (`make run`), the application is fully automated.
 
-- **Scalability:** How would you handle a scenario where the provider sends thousands of plans with hundreds of zones per plan?
-- **High Traffic:** How would your service respond to 5k-10k requests per second?
-- **Optimization Strategies:** How can the system remain performant under heavy load?
+-   **Access the Web Application:** `http://localhost:${APP_PORT}` (e.g., `http://localhost:8088`)
+-   **Access Horizon Dashboard:** `http://localhost/horizon`
+-   **Access Swagger UI:** `http://localhost:${APP_PORT}/api/documentation` (e.g., `http://localhost:8088/api/documentation`)
+-   **Automatic Synchronization:** The `SyncProviderEventsJob` runs automatically every hour (or as configured in `.env` via `EVENT_SYNC_SCHEDULE`). You can monitor its execution and status in the Horizon dashboard.
 
-You can implement these enhancements in your code or describe your approach in the README.
+## Testing
+The project includes a comprehensive testing suite.
 
-## Need Help?
+-   **Run Unit & Feature Tests:**
+    ```bash
+    make test
+    ```
+-   **Run Code Style Check:**
+    ```bash
+    make lint
+    ```
+-   **Load Testing (k6):**
+    The project includes various load testing profiles using k6.
+    -   Light load: `make test-load-light`
+    -   Medium load (default): `make test-load` or `make test-load-medium`
+    -   Heavy load: `make test-load-heavy`
+    -   Extreme load (RPS-based): `make test-load-extreme`
 
-If you have any questions, feel free to reach out. We’ll get back to you as soon as possible.
-
-## Feedback
-
-We value your time and effort! Please take a moment to share your thoughts on our process:
-
-[📋 Feedback Form](https://forms.gle/6NdDApby6p3hHsWp8)
-
-Thank you for participating, and good luck! 🎉
+## Future Improvements
+-   Implement HTTP caching (e.g., Varnish) for the API.
+-   Investigate database read replicas for further scalability.
+-   Enhance error handling and notifications for job failures.
+-   Implement a more granular delisting strategy (currently assumes `plan_id` is sufficient).

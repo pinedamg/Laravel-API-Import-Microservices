@@ -1,0 +1,136 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Fever Code Challenge API Documentation",
+        "description": "API documentation for the Fever Code Challenge solution.",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/search": {
+            "get": {
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Search for events within a date range",
+                "operationId": "bd3049d710a2d89df39b7c5db5f5809c",
+                "parameters": [
+                    {
+                        "name": "starts_at",
+                        "in": "query",
+                        "description": "Start date and time (ISO 8601 format, e.g., 2025-01-01T00:00:00)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "ends_at",
+                        "in": "query",
+                        "description": "End date and time (ISO 8601 format, e.g., 2025-12-31T23:59:59)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/EventResource"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The given data was invalid."
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "example": {
+                                                "starts_at": [
+                                                    "The starts at field is required."
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "EventResource": {
+                "title": "Event Resource",
+                "description": "Event resource object",
+                "properties": {
+                    "id": {
+                        "description": "ID of the event",
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "title": {
+                        "description": "Title of the event",
+                        "type": "string"
+                    },
+                    "start_date": {
+                        "description": "Start date of the event",
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "start_time": {
+                        "description": "Start time of the event",
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "end_date": {
+                        "description": "End date of the event",
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "end_time": {
+                        "description": "End time of the event",
+                        "type": "string",
+                        "format": "time"
+                    },
+                    "min_price": {
+                        "description": "Minimum price of the event",
+                        "type": "number",
+                        "format": "float"
+                    },
+                    "max_price": {
+                        "description": "Maximum price of the event",
+                        "type": "number",
+                        "format": "float"
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Events",
+            "description": "Events"
+        }
+    ]
+}
