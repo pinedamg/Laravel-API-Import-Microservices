@@ -16,6 +16,9 @@ setup:
 	./vendor/bin/sail up -d --build
 	@echo "Waiting 20 seconds for containers to be ready..."
 	@sleep 20
+	# Set permissions for storage and bootstrap/cache
+	./vendor/bin/sail exec laravel.test chown -R sail:sail storage bootstrap/cache
+	./vendor/bin/sail exec laravel.test chmod -R 775 storage bootstrap/cache
 	# 2. Generate application key
 	./vendor/bin/sail artisan key:generate
 	# 3. Install Octane server (RoadRunner binary) and publish config
