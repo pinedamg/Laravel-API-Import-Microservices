@@ -14,6 +14,7 @@ This repository contains the solution for the Fever Code Challenge, developed as
     - [Job Synchronization and Resilience](#job-synchronization-and-resilience)
   - [Usage](#usage)
   - [Testing](#testing)
+  - [Load and Stress Testing](#load-and-stress-testing)
   - [Future Improvements](#future-improvements)
 
 ## Introduction
@@ -146,6 +147,16 @@ Once the setup is complete and containers are running (`make run`), the applicat
 -   **Access Horizon Dashboard:** `http://localhost/horizon`
 -   **Access Swagger UI:** `http://localhost:${APP_PORT}/api/documentation` (e.g., `http://localhost:8088/api/documentation`)
 -   **Automatic Synchronization:** The `SyncProviderEventsJob` runs automatically every hour (or as configured in `.env` via `EVENT_SYNC_SCHEDULE`). You can monitor its execution and status in the Horizon dashboard.
+-   **Compare APIs:**
+    ```bash
+    make compare-apis
+    ```
+    This command compares the current API specification with a previous version.
+-   **Destroy Application:**
+    ```bash
+    make destroy
+    ```
+    This command stops and removes all Docker containers, networks, and volumes associated with the application, effectively cleaning up the environment.
 
 ## Testing
 The project includes a comprehensive testing suite.
@@ -158,12 +169,29 @@ The project includes a comprehensive testing suite.
     ```bash
     make lint
     ```
--   **Load Testing (k6):**
-    The project includes various load testing profiles using k6.
-    -   Light load: `make test-load-light`
-    -   Medium load (default): `make test-load` or `make test-load-medium`
-    -   Heavy load: `make test-load-heavy`
-    -   Extreme load (RPS-based): `make test-load-extreme`
+## Load and Stress Testing
+The project includes various load and stress testing profiles using k6 to evaluate the microservice's performance under various traffic conditions.
+
+-   Light load:
+    ```bash
+    make test-load-light
+    ```
+-   Medium load (default):
+    ```bash
+    make test-load
+    ```
+    or
+    ```bash
+    make test-load-medium
+    ```
+-   Heavy load:
+    ```bash
+    make test-load-heavy
+    ```
+-   Extreme load (RPS-based):
+    ```bash
+    make test-load-extreme
+    ```
 
 ## Future Improvements
 -   Implement HTTP caching (e.g., Varnish) for the API.
